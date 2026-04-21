@@ -3,29 +3,15 @@ import sys
 from itertools import batched
 
 import click
-from pypdf import PaperSize, PdfReader, PdfWriter, Transformation
+from pypdf import PageObject, PaperSize, PdfReader, PdfWriter, Transformation
 from pypdf.errors import PdfStreamError
 
 
-@click.command(
-    context_settings=dict(
-        help_option_names=["-h", "--help"],
-    )
-)
-@click.argument("input", type=click.File("rb"))
-@click.argument("output", type=click.File("wb"), default="out.pdf")
-def cli(input, output):
-    try:
-        reader = PdfReader(input)
-    except PdfStreamError:
-        click.echo("Invalid PDF", err=True)
-        sys.exit(1)
+def zine8(pages: list[PageObject], writer: PdfWriter):
+    for batch in batched(pages, n=8):
+        merged_page = writer.add_blank_page(PaperSize.A4.height, PaperSize.A4.width)
 
-    out = PdfWriter()
-    for pages in batched(reader.pages, n=8):
-        merged_page = out.add_blank_page(PaperSize.A4.height, PaperSize.A4.width)
-
-        for i, page in enumerate(pages):
+        for i, page in enumerate(batch):
             page.rotation += 180 * (1 <= i <= 4)
             page.transfer_rotation_to_content()
 
@@ -47,6 +33,23 @@ def cli(input, output):
 
             merged_page.merge_transformed_page(page, t)
 
+
+@click.command(
+    context_settings=dict(
+        help_option_names=["-h", "--help"],
+    )
+)
+@click.argument("input", type=click.File("rb"))
+@click.argument("output", type=click.File("wb"), default="out.pdf")
+def cli(input, output):
+    try:
+        reader = PdfReader(input)
+    except PdfStreamError:
+        click.echo("Invalid PDF", err=True)
+        sys.exit(1)
+
+    out = PdfWriter()
+    zine8(reader.pages, out)
     out.write(output)
 
 
